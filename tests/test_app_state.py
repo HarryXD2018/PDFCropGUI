@@ -44,6 +44,7 @@ class AutomaticMarginStateTests(unittest.TestCase):
         app.reset_button_text_var = FakeVariable("")
         app.status_var = FakeVariable("")
         app.scope_frame = FakeWidget()
+        app.remove_outside_frame = FakeWidget()
         app.pdfcrop_frame = FakeWidget()
         app.canvas = FakeWidget()
         app._draw_overlay = lambda: None

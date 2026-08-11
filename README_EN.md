@@ -1,6 +1,6 @@
 # PDFCropGUI
 
-![Version](https://img.shields.io/badge/version-1.2.0-2563eb)
+![Version](https://img.shields.io/badge/version-1.3.0-2563eb)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555)
 
@@ -15,6 +15,7 @@ A lightweight visual PDF cropping tool with mouse selection, independently dragg
 - Draw any keep area directly on the PDF preview;
 - Drag the left, top, right, and bottom borders independently, or drag a corner to adjust two borders at once;
 - Enter exact crop amounts in millimeters;
+- Optionally remove outside-page content by redacting text, image pixels, and vector graphics while rewriting the PDF;
 - Apply manual cropping to all pages, the current page, or a custom range such as `1-3,5,8-`;
 - Drop PDF files directly into the window, including paths containing spaces or non-ASCII characters;
 - Use `pdfcrop` to detect each page's content boundary, with `0 mm` extra margin by default;
@@ -27,14 +28,14 @@ A lightweight visual PDF cropping tool with mouse selection, independently dragg
 
 | Item | Manual mode | Automatic mode |
 | --- | --- | --- |
-| Engine | PyMuPDF / PDF CropBox | `pdfcrop` + Ghostscript |
+| Engine | PyMuPDF / CropBox or Redaction | `pdfcrop` + Ghostscript |
 | Crop source | User selection or millimeter values | Actual content boundary on each page |
 | Meaning of values | Amount removed from each page edge | Extra whitespace retained around detected content |
 | Default | `0 mm`, keep the whole page | `0 mm`, use the tight detected boundary |
 | Page scope | All, current, or custom pages | All pages |
 | Requires `pdfcrop` | No | Yes |
 
-Manual mode changes the PDF CropBox so that selected pages can be processed independently. It does not securely delete objects outside the visible region and must not be used as a redaction tool.
+By default, manual mode only changes the PDF CropBox, so outside objects remain in the file. When **Delete content outside the crop box** is enabled, the application uses PyMuPDF Redaction to remove outside text, erase outside image pixels, remove intersecting vector objects and outside interactive objects, then sets the CropBox and fully rewrites the PDF.
 
 ## Windows Quick Start
 
@@ -73,9 +74,12 @@ C:\texlive\<version>\bin\windows\pdfcrop.exe
 3. Drag a red border to adjust one edge, or drag a white corner handle to adjust two edges.
 4. For exact control, enter the left, top, right, and bottom crop amounts in millimeters.
 5. Select all pages, the current page, or a custom page range.
-6. Choose a new output file and start cropping.
+6. Enable `删除框外页面内容（重写 PDF，较慢）` (**Delete content outside the crop box**) if the outside data must be removed.
+7. Choose a new output file and start cropping.
 
 When **All pages** is selected for pages of different sizes, the program applies the same physical margins rather than the same proportions.
+
+Deletion mode prevents outside content from reappearing merely by restoring the CropBox, but it is not complete PDF sanitization. It does not automatically remove metadata, attachments, unprocessed pages, or duplicate content elsewhere. Text, images, or vector objects crossing the crop boundary may be partially erased or removed in full, so retain the source and inspect the result.
 
 ### Automatic Cropping
 
@@ -143,6 +147,8 @@ The current test suite covers:
 - Page-range parsing;
 - `pdfcrop` command construction and path-safe temporary staging;
 - Selected pages, rotated pages, existing CropBoxes, and encrypted PDFs;
+- The recoverability difference between regular CropBox cropping and deletion mode;
+- Rendered removal of outside image pixels and vector graphics;
 - Reopening output PDFs and validating page counts and dimensions.
 
 ## Project Layout
@@ -181,12 +187,21 @@ python -m pip install -r requirements.txt
 
 `pdfcrop` cannot safely receive an interactive PDF password. Use manual mode, or save an unencrypted copy with a trusted application first.
 
+### Does manual mode also invoke pdfcrop?
+
+No. PyMuPDF handles manual mode: regular cropping only sets the CropBox, while the deletion option applies PDF Redaction to outside page content. Only automatic mode invokes the external `pdfcrop` program.
+
+### Does deletion mode completely sanitize sensitive information?
+
+Not by itself. It removes page content outside the selected crop rectangle and fully rewrites the file with garbage collection, but it does not proactively remove metadata, attachments, unselected pages, or duplicates elsewhere. Use a dedicated PDF sanitization workflow for high-sensitivity documents.
+
 ### A digital signature becomes invalid
 
 Resaving a PDF usually invalidates its existing digital signature. Do not process documents whose signature must remain valid.
 
 ## Changelog
 
+- **v1.3.0**: Added manual deletion of content outside the crop box through PDF Redaction and full-file rewriting, with recovery, text, image, and vector-content tests.
 - **v1.2.0**: Fixed `pdfcrop` link failures caused by Windows special paths; made the tight automatic boundary the default; separated manual and automatic settings.
 - **v1.1.0**: Added independently draggable borders/corners and native file drag-and-drop.
 - **v1.0.0**: Initial release with preview, page-aware manual cropping, and `pdfcrop` automatic cropping.

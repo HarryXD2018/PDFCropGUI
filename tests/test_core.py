@@ -119,6 +119,58 @@ class CropTests(unittest.TestCase):
         with fitz.open(output) as document:
             self.assertTrue(document.needs_pass)
 
+    def test_remove_outside_deletes_text_beyond_cropbox(self) -> None:
+        source = self.directory / "sensitive.pdf"
+        with fitz.open() as document:
+            page = document.new_page(width=300, height=300)
+            page.insert_text((15, 25), "OUTSIDE_SECRET")
+            page.insert_text((115, 155), "INSIDE_VISIBLE")
+            page.draw_rect(fitz.Rect(5, 5, 70, 70), color=(1, 0, 0), fill=(1, 0, 0))
+            pixmap = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 10, 10), False)
+            pixmap.clear_with(0x00FF00)
+            page.insert_image(
+                fitz.Rect(5, 80, 70, 145),
+                stream=pixmap.tobytes("png"),
+            )
+            document.save(source)
+
+        secure_output = self.directory / "secure.pdf"
+        manual_crop(
+            source,
+            secure_output,
+            MarginsMM(35, 35, 35, 35),
+            [0],
+            remove_outside=True,
+        )
+
+        with fitz.open(secure_output) as document:
+            page = document[0]
+            self.assertIn("INSIDE_VISIBLE", page.get_text())
+            self.assertNotIn("OUTSIDE_SECRET", page.get_text())
+            page.set_cropbox(page.mediabox)
+            self.assertNotIn("OUTSIDE_SECRET", page.get_text())
+            rendered = page.get_pixmap(alpha=False)
+            self.assertTrue(all(channel > 245 for channel in rendered.pixel(30, 30)))
+            self.assertTrue(all(channel > 245 for channel in rendered.pixel(30, 110)))
+            self.assertEqual(page.get_drawings(), [])
+
+    def test_regular_crop_keeps_outside_content_recoverable(self) -> None:
+        source = self.directory / "recoverable.pdf"
+        with fitz.open() as document:
+            page = document.new_page(width=300, height=300)
+            page.insert_text((15, 25), "OUTSIDE_SECRET")
+            page.insert_text((115, 155), "INSIDE_VISIBLE")
+            document.save(source)
+
+        regular_output = self.directory / "regular.pdf"
+        manual_crop(source, regular_output, MarginsMM(35, 35, 35, 35), [0])
+
+        with fitz.open(regular_output) as document:
+            page = document[0]
+            self.assertNotIn("OUTSIDE_SECRET", page.get_text())
+            page.set_cropbox(page.mediabox)
+            self.assertIn("OUTSIDE_SECRET", page.get_text())
+
     @unittest.skipIf(os.name == "nt", "Executable fixture is POSIX-only")
     def test_pdfcrop_adapter_accepts_successful_output(self) -> None:
         fake = self.directory / "fake_pdfcrop"

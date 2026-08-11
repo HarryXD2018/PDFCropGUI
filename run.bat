@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-set "DEPS_MARKER=.venv\.pdfcrop-gui-1.2.0"
+set "DEPS_MARKER=.venv\.pdfcrop-gui-1.3.0"
 if not exist ".venv\Scripts\python.exe" (
   py -3 -m venv .venv
   if errorlevel 1 goto :error

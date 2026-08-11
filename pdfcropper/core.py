@@ -265,11 +265,14 @@ def manual_crop(
     page_indices: Sequence[int] | Iterable[int],
     *,
     password: str | None = None,
+    remove_outside: bool = False,
 ) -> None:
     """Crop selected pages with physical margins, preserving other pages.
 
     Rotated pages are normalized before setting the crop box so that the GUI's
-    top-left visual coordinates remain intuitive.
+    top-left visual coordinates remain intuitive. If ``remove_outside`` is
+    true, page content outside the keep rectangle is first removed with PDF
+    redactions before the CropBox is changed.
     """
 
     source = Path(input_pdf).resolve()
@@ -299,6 +302,14 @@ def manual_crop(
                 margins.validate_page(page_rect.width, page_rect.height)
                 left, top, right, bottom = margins.as_points()
                 base_cropbox = page.cropbox
+                keep_rect = fitz.Rect(
+                    page_rect.x0 + left,
+                    page_rect.y0 + top,
+                    page_rect.x1 - right,
+                    page_rect.y1 - bottom,
+                )
+                if remove_outside:
+                    _remove_page_content_outside(page, keep_rect, page_rect)
                 crop_rect = fitz.Rect(
                     base_cropbox.x0 + left,
                     base_cropbox.y0 + top,
@@ -326,3 +337,51 @@ def manual_crop(
         raise CropError(f"手动裁剪失败：{exc}") from exc
     finally:
         temp_output.unlink(missing_ok=True)
+
+
+def _rect_is_inside(inner: fitz.Rect, outer: fitz.Rect) -> bool:
+    """Return whether a non-empty rectangle is fully inside another one."""
+
+    return not inner.is_empty and outer.contains(inner)
+
+
+def _remove_page_content_outside(
+    page: fitz.Page,
+    keep_rect: fitz.Rect,
+    page_rect: fitz.Rect,
+) -> None:
+    """Permanently remove page-level content outside ``keep_rect``.
+
+    Redaction handles text, raster images, and vector graphics. Interactive
+    objects that are not fully contained in the keep rectangle are removed as
+    well so their actions or payloads do not survive outside the visible page.
+    """
+
+    for widget in list(page.widgets() or []):
+        if not _rect_is_inside(fitz.Rect(widget.rect), keep_rect):
+            page.delete_widget(widget)
+
+    for annotation in list(page.annots() or []):
+        if not _rect_is_inside(fitz.Rect(annotation.rect), keep_rect):
+            page.delete_annot(annotation)
+
+    for link in list(page.get_links()):
+        link_rect = link.get("from")
+        if link_rect is not None and not _rect_is_inside(fitz.Rect(link_rect), keep_rect):
+            page.delete_link(link)
+
+    outside_rectangles = (
+        fitz.Rect(page_rect.x0, page_rect.y0, page_rect.x1, keep_rect.y0),
+        fitz.Rect(page_rect.x0, keep_rect.y1, page_rect.x1, page_rect.y1),
+        fitz.Rect(page_rect.x0, keep_rect.y0, keep_rect.x0, keep_rect.y1),
+        fitz.Rect(keep_rect.x1, keep_rect.y0, page_rect.x1, keep_rect.y1),
+    )
+    for rectangle in outside_rectangles:
+        if rectangle.width > 0 and rectangle.height > 0:
+            page.add_redact_annot(rectangle, fill=None, cross_out=False)
+
+    page.apply_redactions(
+        images=fitz.PDF_REDACT_IMAGE_PIXELS,
+        graphics=fitz.PDF_REDACT_LINE_ART_REMOVE_IF_TOUCHED,
+        text=fitz.PDF_REDACT_TEXT_REMOVE,
+    )

@@ -66,6 +66,7 @@ class PDFCropApp(TkinterDnD.Tk):
         self.worker_results: queue.Queue[tuple[Path, Exception | None]] = queue.Queue()
 
         self.mode_var = tk.StringVar(value="manual")
+        self.remove_outside_var = tk.BooleanVar(value=False)
         self.scope_var = tk.StringVar(value="all")
         self.custom_pages_var = tk.StringVar(value="1-")
         self.page_status_var = tk.StringVar(value="未打开 PDF")
@@ -200,6 +201,22 @@ class PDFCropApp(TkinterDnD.Tk):
         ).grid(
             row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0)
         )
+
+        self.remove_outside_frame = ttk.Frame(margin_frame)
+        self.remove_outside_frame.grid(
+            row=4, column=0, columnspan=4, sticky="ew", pady=(10, 0)
+        )
+        ttk.Checkbutton(
+            self.remove_outside_frame,
+            text="删除框外页面内容（重写 PDF，较慢）",
+            variable=self.remove_outside_var,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            self.remove_outside_frame,
+            text="删除框外文字、图片和矢量对象；跨边界对象可能受影响。",
+            wraplength=275,
+            style="Muted.TLabel",
+        ).grid(row=1, column=0, sticky="w", pady=(3, 0))
 
         self.scope_frame = ttk.LabelFrame(controls, text="3. 作用页面", padding=10)
         self.scope_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
@@ -413,6 +430,7 @@ class PDFCropApp(TkinterDnD.Tk):
             self.margin_title_var.set("内容外额外保留边距（mm，默认 0）")
             self.reset_button_text_var.set("恢复 pdfcrop 紧边界")
             self.scope_frame.grid_remove()
+            self.remove_outside_frame.grid_remove()
             self.pdfcrop_frame.grid()
             self.canvas.configure(cursor="arrow")
             self.status_var.set("默认 0 mm：输出紧贴 pdfcrop 检测到的内容边界。")
@@ -420,6 +438,7 @@ class PDFCropApp(TkinterDnD.Tk):
             self.margin_title_var.set("从页面四边裁去的长度（mm）")
             self.reset_button_text_var.set("重置为整页")
             self.scope_frame.grid()
+            self.remove_outside_frame.grid()
             self.pdfcrop_frame.grid_remove()
             self.canvas.configure(cursor="crosshair")
             self.status_var.set("可重新框选保留区域，也可分别拖动四条边或四个角点。")
@@ -733,12 +752,14 @@ class PDFCropApp(TkinterDnD.Tk):
             margins = self._read_margins()
             mode = self.mode_var.get()
             if mode == "manual":
+                remove_outside = bool(self.remove_outside_var.get())
                 pages = self._selected_pages()
                 for index in pages:
                     page = self.document[index]
                     margins.validate_page(page.rect.width, page.rect.height)
                 executable = None
             else:
+                remove_outside = False
                 pages = []
                 executable = find_pdfcrop(self.pdfcrop_path_var.get().strip() or None)
                 if not executable:
@@ -771,7 +792,10 @@ class PDFCropApp(TkinterDnD.Tk):
         self.busy = True
         self.crop_button.configure(state=tk.DISABLED)
         self.open_button.configure(state=tk.DISABLED)
-        self.status_var.set("正在裁剪并校验输出，请稍候…")
+        if remove_outside:
+            self.status_var.set("正在删除框外页面内容、重写并校验 PDF，请稍候…")
+        else:
+            self.status_var.set("正在裁剪并校验输出，请稍候…")
         source_path = self.input_path
         password = self.password
 
@@ -793,6 +817,7 @@ class PDFCropApp(TkinterDnD.Tk):
                         margins,
                         pages,
                         password=password,
+                        remove_outside=remove_outside,
                     )
                 self.worker_results.put((output_path, None))
             except Exception as exc:
