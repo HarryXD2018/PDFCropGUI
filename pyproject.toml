@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdfcrop-gui-cn"
+version = "1.2.0"
+description = "A small visual PDF cropping tool integrating pdfcrop."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "PyMuPDF>=1.24,<2",
+  "Pillow>=10,<13",
+  "tkinterdnd2>=0.6.2,<1",
+]
+
+[project.scripts]
+pdfcrop-gui = "pdfcropper.app:main"
+
+[tool.setuptools]
+packages = ["pdfcropper"]

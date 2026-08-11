@@ -1,0 +1,196 @@
+# PDFCropGUI
+
+![Version](https://img.shields.io/badge/version-1.2.0-2563eb)
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?logo=python&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555)
+
+[简体中文](README.md) | **English**
+
+A lightweight visual PDF cropping tool with mouse selection, independently draggable borders, millimeter-level adjustment, page-range cropping, and native file drag-and-drop. Its automatic mode integrates `pdfcrop` to detect and remove page whitespace.
+
+> The current application interface is Chinese-localized. This document provides complete English setup and operating instructions.
+
+## Highlights
+
+- Draw any keep area directly on the PDF preview;
+- Drag the left, top, right, and bottom borders independently, or drag a corner to adjust two borders at once;
+- Enter exact crop amounts in millimeters;
+- Apply manual cropping to all pages, the current page, or a custom range such as `1-3,5,8-`;
+- Drop PDF files directly into the window, including paths containing spaces or non-ASCII characters;
+- Use `pdfcrop` to detect each page's content boundary, with `0 mm` extra margin by default;
+- Keep manual and automatic margin values separate when switching modes;
+- Handle multi-page PDFs, rotated pages, existing CropBoxes, and password-protected PDFs in manual mode;
+- Validate the generated PDF before replacing the destination file;
+- Run on Windows, macOS, and Linux.
+
+## Cropping Modes
+
+| Item | Manual mode | Automatic mode |
+| --- | --- | --- |
+| Engine | PyMuPDF / PDF CropBox | `pdfcrop` + Ghostscript |
+| Crop source | User selection or millimeter values | Actual content boundary on each page |
+| Meaning of values | Amount removed from each page edge | Extra whitespace retained around detected content |
+| Default | `0 mm`, keep the whole page | `0 mm`, use the tight detected boundary |
+| Page scope | All, current, or custom pages | All pages |
+| Requires `pdfcrop` | No | Yes |
+
+Manual mode changes the PDF CropBox so that selected pages can be processed independently. It does not securely delete objects outside the visible region and must not be used as a redaction tool.
+
+## Windows Quick Start
+
+1. Install [Python 3.10 or later](https://www.python.org/downloads/) and enable **Add Python to PATH** during installation.
+2. Download or clone this repository.
+3. Double-click `run.bat`.
+4. Click `打开 PDF` (**Open PDF**) or drop a PDF into the window, then choose manual or automatic mode.
+
+On first launch, the script creates a `.venv` environment and installs the required packages. Running `run.bat` again after overwriting an older release also installs dependencies introduced by the new version.
+
+Manual mode does not require `pdfcrop`. Automatic mode additionally requires:
+
+- [TeX Live](https://tug.org/texlive/), [MacTeX](https://tug.org/mactex/), or [MiKTeX](https://miktex.org/download);
+- [Ghostscript](https://ghostscript.com/releases/gsdnld.html).
+
+Check the installation from Command Prompt:
+
+```bat
+pdfcrop --version
+gswin64c --version
+```
+
+If PDFCropGUI cannot locate `pdfcrop`, switch to `自动裁剪` (**Automatic crop**) and click `选择程序…` (**Select executable...**). Common Windows locations include:
+
+```text
+C:\Program Files\MiKTeX\miktex\bin\x64\pdfcrop.exe
+C:\texlive\<version>\bin\windows\pdfcrop.exe
+```
+
+## Usage
+
+### Manual Cropping
+
+1. Open or drop a PDF.
+2. Draw the keep area on the preview. The area inside the red dashed rectangle remains visible.
+3. Drag a red border to adjust one edge, or drag a white corner handle to adjust two edges.
+4. For exact control, enter the left, top, right, and bottom crop amounts in millimeters.
+5. Select all pages, the current page, or a custom page range.
+6. Choose a new output file and start cropping.
+
+When **All pages** is selected for pages of different sizes, the program applies the same physical margins rather than the same proportions.
+
+### Automatic Cropping
+
+1. Switch to **Automatic crop**.
+2. Leave all four values at `0 mm` to use the tight boundary detected by `pdfcrop`.
+3. Enter positive values, such as `2 mm`, to retain whitespace around the detected content.
+4. Select an output file and start cropping.
+
+The program stages the input PDF in an isolated temporary directory and invokes `pdfcrop` with a safe relative filename. This avoids the Windows `Link ... failed (Operation not permitted)` error triggered by special paths and also isolates temporary files created by `pdfcrop`.
+
+## Run from the Command Line
+
+```bash
+python -m venv .venv
+```
+
+Windows:
+
+```bat
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python main.py
+```
+
+macOS / Linux:
+
+```bash
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python main.py
+```
+
+You can also install the application as a command:
+
+```bash
+python -m pip install .
+pdfcrop-gui
+```
+
+## Build a Windows EXE
+
+On Windows, double-click:
+
+```text
+build_exe.bat
+```
+
+The executable is created at:
+
+```text
+dist\PDFCropGUI.exe
+```
+
+The EXE includes the interface, drag-and-drop resources, and manual cropping dependencies. It does not bundle TeX Live, MiKTeX, or Ghostscript, so computers using automatic mode must still provide `pdfcrop`.
+
+## Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The current test suite covers:
+
+- Border and corner hit testing, independent resizing, and minimum crop-box size;
+- Dropped file paths and file URI parsing;
+- The automatic tight-boundary default and separation of manual/automatic margins;
+- Page-range parsing;
+- `pdfcrop` command construction and path-safe temporary staging;
+- Selected pages, rotated pages, existing CropBoxes, and encrypted PDFs;
+- Reopening output PDFs and validating page counts and dimensions.
+
+## Project Layout
+
+| Path | Purpose |
+| --- | --- |
+| `README.md` / `README_EN.md` | Chinese and English project documentation |
+| `main.py` | Application entry point |
+| `pdfcropper/app.py` | Tkinter interface and interaction logic |
+| `pdfcropper/core.py` | `pdfcrop` adapter, manual cropping, and PDF validation |
+| `pdfcropper/interaction.py` | Pure crop-box and file-drop logic |
+| `tests/` | Unit tests |
+| `run.bat` | One-click Windows launcher |
+| `build_exe.bat` | Windows EXE build script |
+| `hook-tkinterdnd2.py` | PyInstaller hook for drag-and-drop resources |
+
+## Troubleshooting
+
+### pdfcrop was not found
+
+Install TeX Live, MacTeX, or MiKTeX and verify that `pdfcrop --version` works in a terminal. You may also select `pdfcrop.exe` or `pdfcrop.pl` manually in the application.
+
+### Automatic cropping reports Operation not permitted
+
+Use v1.2.0 or later. Recent versions do not pass a Windows absolute path directly to `pdfcrop`; they use a safe temporary filename instead.
+
+### File drag-and-drop is unavailable
+
+Run `run.bat` again, or install the complete dependency set:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+### An encrypted PDF cannot be cropped automatically
+
+`pdfcrop` cannot safely receive an interactive PDF password. Use manual mode, or save an unencrypted copy with a trusted application first.
+
+### A digital signature becomes invalid
+
+Resaving a PDF usually invalidates its existing digital signature. Do not process documents whose signature must remain valid.
+
+## Changelog
+
+- **v1.2.0**: Fixed `pdfcrop` link failures caused by Windows special paths; made the tight automatic boundary the default; separated manual and automatic settings.
+- **v1.1.0**: Added independently draggable borders/corners and native file drag-and-drop.
+- **v1.0.0**: Initial release with preview, page-aware manual cropping, and `pdfcrop` automatic cropping.
+
+## Contributing
+
+Issues and pull requests are welcome. When reporting a bug, include the operating system, Python version, PDFCropGUI version, and the output of `pdfcrop --version`. Do not upload PDFs containing private or sensitive information.
