@@ -88,7 +88,78 @@ C:\texlive\<版本号>\bin\windows\pdfcrop.exe
 
 程序会把输入 PDF 复制到隔离临时目录，并以安全相对文件名调用 `pdfcrop`。这一流程可避开 Windows 下特殊路径触发的 `Link ... failed (Operation not permitted)` 错误，也会隔离 `pdfcrop` 生成的临时文件。
 
-## 命令行运行
+## macOS / Linux 快速开始（conda）
+
+`run.sh` 会自动管理 conda 环境，支持 macOS 与 Linux：
+
+```bash
+./run.sh
+```
+
+首次运行时会依次完成：
+
+1. 检查 `conda` 是否可用；
+2. 环境 `pdfcropgui` 不存在时执行 `conda create -n pdfcropgui python=3.11 tk`；
+3. 依赖标记文件缺失时，从内部镜像安装 `requirements.txt`；
+4. 启动图形界面。
+
+依赖已装好后，后续启动只会执行最后一步。可用环境变量覆盖默认值：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `PDFCROPGUI_ENV` | `pdfcropgui` | conda 环境名 |
+| `PDFCROPGUI_PIP_INDEX` | `https://pypi.corp.kuaishou.com/kuaishou/prod` | pip 源；`--trusted-host` 会从该地址自动解析 |
+
+手动安装方式：
+
+```bash
+conda create -n pdfcropgui python=3.11 tk
+conda activate pdfcropgui
+pip install -i https://pypi.corp.kuaishou.com/kuaishou/prod \
+  --trusted-host pypi.corp.kuaishou.com -r requirements.txt
+```
+
+## 命令行裁剪
+
+### `run_cli.sh`：最常用的自动裁剪
+
+```bash
+./run_cli.sh 文档.pdf
+```
+
+只传第一个参数即可，等同于此前的自动模式：调用 `pdfcrop` 检测内容边界，四边各额外保留 `2 mm`，结果保存为同目录下的 `文档_cropped.pdf`。脚本同样会自动创建 conda 环境并安装依赖，之后可以直接透传 `autocrop.py` 的参数：
+
+```bash
+./run_cli.sh 文档.pdf -p 0        # 紧贴内容，不留白
+./run_cli.sh 文档.pdf -d out/     # 输出到 out/
+./run_cli.sh 文档.pdf -f          # 覆盖已存在的输出
+```
+
+### `autocrop.py`：完整参数
+
+`autocrop.py` 直接复用 `pdfcropper/core.py` 中图形界面自动模式的同一条 `pdfcrop` 调用链路（隔离临时目录、重开校验、原子替换），因此行为与界面一致。它需要已激活的环境：
+
+```bash
+conda activate pdfcropgui
+python autocrop.py 文档.pdf
+```
+
+| 参数 | 说明 |
+| --- | --- |
+| `inputs` | 一个或多个待裁剪的 PDF |
+| `-p, --pad MM` | 四边统一留白，默认 `2` |
+| `--margins L T R B` | 分别指定四边留白（毫米），覆盖 `--pad` |
+| `-o, --output` | 指定输出文件，仅适用于单个输入 |
+| `-d, --output-dir` | 输出目录，默认与输入同目录 |
+| `--suffix` | 默认输出后缀，默认 `_cropped` |
+| `-f, --force` | 覆盖已存在的输出文件 |
+| `--pdfcrop` | 指定 `pdfcrop` 可执行文件 |
+| `--timeout SECONDS` | 单个文件的超时时间，默认 `300` |
+| `-v, --verbose` | 打印 `pdfcrop` 的输出 |
+
+输出已存在且未指定 `-f` 时会跳过该文件；任意文件裁剪失败或跳过时，脚本以非零状态码退出，便于在批处理中判断结果。
+
+### 手动创建虚拟环境
 
 ```bash
 python -m venv .venv
@@ -160,6 +231,9 @@ python -m unittest discover -s tests -v
 | `pdfcropper/interaction.py` | 裁剪框和文件拖放的纯逻辑 |
 | `tests/` | 单元测试 |
 | `run.bat` | Windows 一键运行脚本 |
+| `run.sh` | macOS / Linux 一键启动脚本（conda，自动建环境装依赖） |
+| `run_cli.sh` | 命令行自动裁剪快捷脚本（默认 2 mm 留白） |
+| `autocrop.py` | 命令行自动裁剪，提供完整参数 |
 | `build_exe.bat` | Windows EXE 打包脚本 |
 | `hook-tkinterdnd2.py` | PyInstaller 拖放资源收集钩子 |
 

@@ -90,7 +90,71 @@ Deletion mode prevents outside content from reappearing merely by restoring the 
 
 The program stages the input PDF in an isolated temporary directory and invokes `pdfcrop` with a safe relative filename. This avoids the Windows `Link ... failed (Operation not permitted)` error triggered by special paths and also isolates temporary files created by `pdfcrop`.
 
-## Run from the Command Line
+## macOS / Linux Quick Start (conda)
+
+`run.sh` manages a conda environment automatically on macOS and Linux:
+
+```bash
+./run.sh
+```
+
+On first run it checks for `conda`, creates the `pdfcropgui` environment (`python=3.11` plus `tk`) if needed, installs `requirements.txt` from the internal mirror when the dependency marker is missing, and then starts the GUI. Later runs skip straight to launching.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PDFCROPGUI_ENV` | `pdfcropgui` | conda environment name |
+| `PDFCROPGUI_PIP_INDEX` | `https://pypi.corp.kuaishou.com/kuaishou/prod` | pip index; `--trusted-host` is derived from it |
+
+Manual setup:
+
+```bash
+conda create -n pdfcropgui python=3.11 tk
+conda activate pdfcropgui
+pip install -i https://pypi.corp.kuaishou.com/kuaishou/prod \
+  --trusted-host pypi.corp.kuaishou.com -r requirements.txt
+```
+
+## Command-Line Cropping
+
+### `run_cli.sh`: the common case
+
+```bash
+./run_cli.sh document.pdf
+```
+
+The first argument is the input path. It runs the automatic mode: `pdfcrop` detects each content box, `2 mm` is added on all four sides, and the result is written next to the input as `document_cropped.pdf`. The script also prepares the conda environment, and any further `autocrop.py` options are passed through:
+
+```bash
+./run_cli.sh document.pdf -p 0        # tight box, no padding
+./run_cli.sh document.pdf -d out/     # write into out/
+./run_cli.sh document.pdf -f          # overwrite an existing output
+```
+
+### `autocrop.py`: full options
+
+`autocrop.py` reuses the same `pdfcrop` pipeline as the GUI's automatic mode (isolated temp directory, validation by reopening, atomic replace). It needs an active environment:
+
+```bash
+conda activate pdfcropgui
+python autocrop.py document.pdf
+```
+
+| Option | Description |
+| --- | --- |
+| `inputs` | One or more PDF files |
+| `-p, --pad MM` | Uniform padding on all sides, default `2` |
+| `--margins L T R B` | Per-side padding in millimeters, overrides `--pad` |
+| `-o, --output` | Explicit output file, single input only |
+| `-d, --output-dir` | Output directory, defaults to the input's directory |
+| `--suffix` | Output suffix, default `_cropped` |
+| `-f, --force` | Overwrite existing outputs |
+| `--pdfcrop` | Path to the `pdfcrop` executable |
+| `--timeout SECONDS` | Per-file timeout, default `300` |
+| `-v, --verbose` | Print `pdfcrop` output |
+
+An existing output is skipped unless `-f` is given; the script exits non-zero when any file fails or is skipped, so batch runs can check the result.
+
+### Manual virtual environment
 
 ```bash
 python -m venv .venv
@@ -162,6 +226,9 @@ The current test suite covers:
 | `pdfcropper/interaction.py` | Pure crop-box and file-drop logic |
 | `tests/` | Unit tests |
 | `run.bat` | One-click Windows launcher |
+| `run.sh` | One-click macOS / Linux launcher (conda, creates env and installs deps) |
+| `run_cli.sh` | Shortcut for command-line auto cropping (2 mm padding) |
+| `autocrop.py` | Command-line auto cropping with full options |
 | `build_exe.bat` | Windows EXE build script |
 | `hook-tkinterdnd2.py` | PyInstaller hook for drag-and-drop resources |
 
